@@ -1,0 +1,112 @@
+name: 📖 Deploy GitHub Pages Using Hugo (Reusable)
+
+on:
+  workflow_call:
+    secrets:
+      GH_ACTIONS_TOKEN:
+        required: true
+    inputs:
+      GH_BRANCH:
+        type: string
+        required: true
+      # Optional: siteBaseURL override (defaults to Pages URL)
+      BASE_URL:
+        type: string
+        required: false
+
+jobs:
+  create-pages:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          submodules: true          # fetch Hugo themes as submodule if used
+          fetch-depth: 0            # Hugo .GitInfo / .Lastmod
+
+      # (Optional) Apply ace-documentation patches like in PROD
+      - name: Create Hugo render hook folder
+        run: mkdir -p themes/ace-documentation/layouts/_default/_markup
+
+      - name: Markdown link render hook (.md → relref)
+        run: |
+          cat << 'EOF' > themes/ace-documentation/layouts/_default/_markup/render-link.html
+          {{- $link := .Destination -}}
+          {{- $url := urls.Parse $link -}}
+          {{- $isRemote := $url.IsAbs -}}
+          {{- if and (not $isRemote) (strings.HasSuffix $url.Path ".md") }}
+            {{- $link = relref .Page $link }}
+          {{- end -}}
+          <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
+          EOF
+
+      - name: Optional Docsy/Ace tweaks (safe sed replacements)
+        run: |
+          if [ -f themes/ace-documentation/layouts/shortcodes/childpages.html ]; then
+            sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' themes/ace-documentation/layouts/shortcodes/childpages.html || true
+          fi
+          if [ -f themes/ace-documentation/layouts/partials/menu.html ]; then
+            sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' themes/ace-documentation/layouts/partials/menu.html || true
+          fi
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: 'latest'
+          extended: true
+
+      - name: Compute baseURL
+        id: baseurl
+        run: |
+          if [ -n "${{ inputs.BASE_URL }}" ]; then
+            echo "url=${{ inputs.BASE_URL }}" >> $GITHUB_OUTPUT
+          else
+            # fallback to Pages canonical URL for this repo
+            echo "url=https://$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{print tolower($1)}').github.io/$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{print $2}')/" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Hugo site
+        run: hugo --minify --baseURL "${{ steps.baseurl.outputs.url }}"
+
+      # Publish artifacts to a staging branch (like prod pattern)
+      - name: Deploy built site into 'hugo-pages' branch under the current branch folder
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          publish_branch: hugo-pages
+          destination_dir: ${{ inputs.GH_BRANCH }}
+          publish_dir: public
+
+  deploy-pages:
+    needs: create-pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout 'hugo-pages'
+        uses: actions/checkout@v4
+        with:
+          ref: hugo-pages
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
