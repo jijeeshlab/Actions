@@ -19,11 +19,9 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      - name: Setup Hugo
-        uses: peaceiris/actions-hugo@v3
+      - uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: 'latest'
           extended: true
 
-      - name: Test build
-        run: hugo --minify --baseURL "http://example.local/"
+      - run: hugo --minify --baseURL "http://example.local/"
