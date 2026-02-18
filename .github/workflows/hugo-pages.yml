@@ -1,4 +1,5 @@
-name: 📖 Deploy GitHub Pages Using Hugo (DEV)
+name: 📖 Deploy GitHub Pages Using Hugo
+
 on:
   workflow_call:
     secrets:
@@ -12,20 +13,28 @@ on:
 jobs:
   create-pages:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_ACTIONS_TOKEN }}
           submodules: true
           fetch-depth: 0
 
+      # ----------------------------
+      #   PATCH THEME (Production-style)
+      # ----------------------------
+
       - name: Modify ace-documentation shortcode template
-        run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' themes/aec-documentation/layouts/shortcodes/childpages.html
+        run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' \
+               themes/aec-documentation/layouts/shortcodes/childpages.html
 
-      - name: Modify navbar template
-        run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' themes/aec-documentation/layouts/partials/menu.html
+      - name: Modify ace-documentation left navbar template
+        run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' \
+               themes/aec-documentation/layouts/partials/menu.html
 
-      - name: Create markup directory
+      - name: Create markdown render hook directory
         run: mkdir -p "themes/aec-documentation/layouts/_default/_markup"
 
       - name: Create markdown link render hook
@@ -40,19 +49,45 @@ jobs:
           <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
           EOF
 
+      - name: Create mermaid render hook
+        run: |
+          cat << 'EOF' > themes/aec-documentation/layouts/_default/_markup/render-codeblock-mermaid.html
+          <div class="mermaid">
+            {{- .Inner | safeHTML }}
+          </div>
+          {{ .Page.Store.Set "hasMermaid" true }}
+          EOF
+
+      - name: Insert mermaid snippet into single.html
+        run: |
+          cat << 'EOF' > /tmp/mermaid.snippet
+          {{ if .Page.Store.Get "hasMermaid" }}
+            <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+            <script>mermaid.initialize({ startOnLoad: true });</script>
+          {{ end }}
+          EOF
+          sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' \
+            themes/aec-documentation/layouts/_default/single.html
+
+      # ----------------------------
+      #   Build with Hugo
+      # ----------------------------
+
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: 'latest'
           extended: true
 
-      - name: Build
+      - name: Build Hugo site
         run: hugo --minify
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          publish_branch: hugo-pages
-          destination_dir: ${{ inputs.GH_BRANCH }}
-          external_repository: jijeeshhomelab/learningrepo
+      # ----------------------------
+      #   Assemble publish tree (includes root index.html)
+      # ----------------------------
+
+      - name: Prepare combined publish directory
+        run: |
+          set -e
+          rm -rf publish && mkdir -p publish
+
