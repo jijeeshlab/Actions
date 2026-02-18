@@ -15,18 +15,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ----------------------------
-      # CHECKOUT MAIN REPO & SUBMODULE
-      # ----------------------------
+      # ---------------------------------------------------------
+      # CHECKOUT SOURCE WITH SUBMODULES
+      # ---------------------------------------------------------
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          submodules: true
+          submodules: true   # Required for theme
           fetch-depth: 0
 
-      # ----------------------------
-      # THEME PATCHES (LIKE PROD)
-      # ----------------------------
+      # ---------------------------------------------------------
+      # ENSURE REQUIRED FOLDERS EXIST
+      # ---------------------------------------------------------
+      - name: Ensure design and workInstructions folders
+        run: |
+          mkdir -p design
+          mkdir -p workInstructions
+
+      # ---------------------------------------------------------
+      # PATCH THEME FILES (MATCHES PRODUCTION)
+      # ---------------------------------------------------------
       - name: Patch childpages shortcode
         run: |
           sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' \
@@ -37,7 +45,7 @@ jobs:
           sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' \
             themes/aec-documentation/layouts/partials/menu.html
 
-      - name: Ensure markup hook directory
+      - name: Ensure markup hook directory exists
         run: mkdir -p themes/aec-documentation/layouts/_default/_markup
 
       - name: Create markdown link render hook
@@ -49,7 +57,7 @@ jobs:
           {{- if and (not $isRemote) (strings.HasSuffix $url.Path ".md") }}
             {{- $link = relref .Page $link }}
           {{- end -}}
-          <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
+          {{ $link | safeURL }}{{ .Text | safeHTML }}</a>
           EOF
 
       - name: Create mermaid render hook
@@ -65,21 +73,21 @@ jobs:
         run: |
           cat << 'EOF' > /tmp/mermaid.snippet
           {{ if .Page.Store.Get "hasMermaid" }}
-            <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+            https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js</script>
             <script>
               mermaid.initialize({ startOnLoad: true });
             </script>
           {{ end }}
           EOF
 
-      - name: Insert mermaid snippet in single.html
+      - name: Inject mermaid snippet
         run: |
           sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' \
             themes/aec-documentation/layouts/_default/single.html
 
-      # ----------------------------
-      # CREATE SECTION INDEX FILES LIKE PROD
-      # ----------------------------
+      # ---------------------------------------------------------
+      # CREATE SECTION INDEX FILES (MATCHES PROD)
+      # ---------------------------------------------------------
       - name: Create design/_index.md
         run: |
           cat << 'EOF' > design/_index.md
@@ -98,15 +106,15 @@ jobs:
           {{< childpages >}}
           EOF
 
-      # ----------------------------
-      # SET VERSION IN main/_index.md
-      # ----------------------------
-      - name: Patch VERSION token in main/_index.md
+      # ---------------------------------------------------------
+      # PATCH VERSION IN HOMEPAGE (MATCHES PROD)
+      # ---------------------------------------------------------
+      - name: Apply version token into main/_index.md
         run: sed -i "s/VERSION/${{ inputs.GH_BRANCH }}/" main/_index.md
 
-      # ----------------------------
-      # BUILD HUGO SITE
-      # ----------------------------
+      # ---------------------------------------------------------
+      # BUILD HUGO
+      # ---------------------------------------------------------
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
@@ -116,14 +124,13 @@ jobs:
       - name: Build site
         run: hugo --minify
 
-      # ----------------------------
-      # DEPLOY (LIKE PROD)
-      # ONLY PUBLISH <branch>/ TO hugo-pages BRANCH
-      # ----------------------------
-      - name: Deploy using gh-pages
+      # ---------------------------------------------------------
+      # DEPLOY <branch>/ TO hugo-pages (MATCHES PRODUCTION)
+      # ---------------------------------------------------------
+      - name: Deploy to hugo-pages/<branch>
         uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
           publish_branch: hugo-pages
-          destination_dir: ${{ inputs.GH_BRANCH }}
           publish_dir: public
+          destination_dir: ${{ inputs.GH_BRANCH }}
