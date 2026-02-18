@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) CHECKOUT
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
@@ -22,20 +23,17 @@ jobs:
           submodules: true
           fetch-depth: 0
 
-      # ----------------------------
-      #   PATCH THEME (Production-style)
-      # ----------------------------
+      # 2) THEME PATCHES
+      - name: Patch childpages shortcode
+        run: |
+          sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' themes/aec-documentation/layouts/shortcodes/childpages.html
 
-      - name: Modify ace-documentation shortcode template
-        run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' \
-               themes/aec-documentation/layouts/shortcodes/childpages.html
+      - name: Patch menu partial
+        run: |
+          sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' themes/aec-documentation/layouts/partials/menu.html
 
-      - name: Modify ace-documentation left navbar template
-        run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' \
-               themes/aec-documentation/layouts/partials/menu.html
-
-      - name: Create markdown render hook directory
-        run: mkdir -p "themes/aec-documentation/layouts/_default/_markup"
+      - name: Ensure markup hook directory
+        run: mkdir -p themes/aec-documentation/layouts/_default/_markup
 
       - name: Create markdown link render hook
         run: |
@@ -46,7 +44,7 @@ jobs:
           {{- if and (not $isRemote) (strings.HasSuffix $url.Path ".md") }}
             {{- $link = relref .Page $link }}
           {{- end -}}
-          <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
+          {{ $link | safeURL }}{{ .Text | safeHTML }}</a>
           EOF
 
       - name: Create mermaid render hook
@@ -58,36 +56,79 @@ jobs:
           {{ .Page.Store.Set "hasMermaid" true }}
           EOF
 
-      - name: Insert mermaid snippet into single.html
+      - name: Inject mermaid snippet
         run: |
           cat << 'EOF' > /tmp/mermaid.snippet
           {{ if .Page.Store.Get "hasMermaid" }}
-            <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+            https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js</script>
             <script>mermaid.initialize({ startOnLoad: true });</script>
           {{ end }}
           EOF
-          sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' \
-            themes/aec-documentation/layouts/_default/single.html
+          sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' themes/aec-documentation/layouts/_default/single.html
 
-      # ----------------------------
-      #   Build with Hugo
-      # ----------------------------
-
+      # 3) BUILD HUGO
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: 'latest'
           extended: true
 
-      - name: Build Hugo site
+      - name: Build site
         run: hugo --minify
 
-      # ----------------------------
-      #   Assemble publish tree (includes root index.html)
-      # ----------------------------
-
-      - name: Prepare combined publish directory
+      # 4) ASSEMBLE PUBLISH DIRECTORY
+      - name: Prepare publish folder
         run: |
           set -e
-          rm -rf publish && mkdir -p publish
+          rm -rf publish && mkdir publish
+          git fetch origin hugo-pages || true
 
+          if git ls-remote --exit-code origin hugo-pages; then
+            git checkout -b hg-pages-tmp origin/hugo-pages
+            rsync -av --delete --exclude='.git' ./ ./publish/ || true
+          fi
+
+          mkdir -p ./publish/${{ inputs.GH_BRANCH }}
+          rsync -av --delete ./public/ ./publish/${{ inputs.GH_BRANCH }}/
+
+      # 5) GENERATE ROOT INDEX.HTML
+      - name: Generate root index.html
+        run: |
+          cd publish
+          versions=$(find . -maxdepth 1 -type d ! -name '.' ! -name '.git' | sed 's|^\./||' | sort)
+
+          cat > index.html << 'EOF'
+          <!doctype html>
+          <html>
+          <head>
+            <meta charset="utf-8"/>
+            <title>DHC Documentation</title>
+            <style>
+              body{font-family:sans-serif;margin:2rem;}
+              a{color:#0a58ca;text-decoration:none;}
+              a:hover{text-decoration:underline;}
+            </style>
+          </head>
+          <body>
+            <h1>DHC Documentation</h1>
+            <p>Choose a documentation release / branch</p>
+            <ul>
+          EOF
+
+          for v in $versions; do
+            echo "<li><a href=\"./$v/\">$v</a></li>" >> index.html
+          done
+
+          cat >> index.html << 'EOF'
+            </ul>
+          </body>
+          </html>
+          EOF
+
+      # 6) DEPLOY
+      - name: Deploy to GitHub Pages (hugo-pages branch)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          publish_branch: hugo-pages
+          publish_dir: publish
