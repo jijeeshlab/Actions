@@ -15,26 +15,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ---------------------------------------------------------
-      # CHECKOUT SOURCE WITH SUBMODULES
-      # ---------------------------------------------------------
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          submodules: true   # Required for theme
+          submodules: true
           fetch-depth: 0
 
-      # ---------------------------------------------------------
-      # ENSURE REQUIRED FOLDERS EXIST
-      # ---------------------------------------------------------
       - name: Ensure design and workInstructions folders
         run: |
           mkdir -p design
           mkdir -p workInstructions
 
-      # ---------------------------------------------------------
-      # PATCH THEME FILES (MATCHES PRODUCTION)
-      # ---------------------------------------------------------
       - name: Patch childpages shortcode
         run: |
           sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' \
@@ -74,9 +65,7 @@ jobs:
           cat << 'EOF' > /tmp/mermaid.snippet
           {{ if .Page.Store.Get "hasMermaid" }}
             https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js</script>
-            <script>
-              mermaid.initialize({ startOnLoad: true });
-            </script>
+            <script>mermaid.initialize({ startOnLoad: true });</script>
           {{ end }}
           EOF
 
@@ -85,9 +74,6 @@ jobs:
           sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' \
             themes/aec-documentation/layouts/_default/single.html
 
-      # ---------------------------------------------------------
-      # CREATE SECTION INDEX FILES (MATCHES PROD)
-      # ---------------------------------------------------------
       - name: Create design/_index.md
         run: |
           cat << 'EOF' > design/_index.md
@@ -106,27 +92,21 @@ jobs:
           {{< childpages >}}
           EOF
 
-      # ---------------------------------------------------------
-      # PATCH VERSION IN HOMEPAGE (MATCHES PROD)
-      # ---------------------------------------------------------
       - name: Apply version token into main/_index.md
         run: sed -i "s/VERSION/${{ inputs.GH_BRANCH }}/" main/_index.md
 
-      # ---------------------------------------------------------
-      # BUILD HUGO
-      # ---------------------------------------------------------
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: 'latest'
           extended: true
 
-      - name: Build site
-        run: hugo --minify
+      # 🔧 IMPORTANT: build with per-branch baseURL so links work on Pages
+      - name: Build site (with per-branch baseURL)
+        run: |
+          hugo --minify \
+               --baseURL "https://jijeeshhomelab.github.io/learningrepo/${{ inputs.GH_BRANCH }}/"
 
-      # ---------------------------------------------------------
-      # DEPLOY <branch>/ TO hugo-pages (MATCHES PRODUCTION)
-      # ---------------------------------------------------------
       - name: Deploy to hugo-pages/<branch>
         uses: peaceiris/actions-gh-pages@v4
         with:
