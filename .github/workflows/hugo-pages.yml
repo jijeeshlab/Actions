@@ -1,5 +1,4 @@
-name: 📖 Deploy GitHub Pages Using Hugo (Reusable)
-
+name: 📖 Deploy GitHub Pages Using Hugo (DEV)
 on:
   workflow_call:
     secrets:
@@ -9,26 +8,37 @@ on:
       GH_BRANCH:
         type: string
         required: true
-      BASE_URL:
-        type: string
-        required: false
 
 jobs:
   create-pages:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          submodules: true      # harmless even if you vendor; needed if you later use submodules
+          submodules: true
           fetch-depth: 0
 
-      # Optional: if you later need render hooks or theme tweaks, add them here
+      - name: Modify ace-documentation shortcode template
+        run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' themes/aec-documentation/layouts/shortcodes/childpages.html
+
+      - name: Modify navbar template
+        run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' themes/aec-documentation/layouts/partials/menu.html
+
+      - name: Create markup directory
+        run: mkdir -p "themes/aec-documentation/layouts/_default/_markup"
+
+      - name: Create markdown link render hook
+        run: |
+          cat << 'EOF' > themes/aec-documentation/layouts/_default/_markup/render-link.html
+          {{- $link := .Destination }}
+          {{- $url := urls.Parse $link }}
+          {{- $isRemote := $url.IsAbs }}
+          {{- if and (not $isRemote) (strings.HasSuffix $url.Path ".md") }}
+            {{- $link = relref .Page $link }}
+          {{- end -}}
+          <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
+          EOF
 
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
@@ -36,43 +46,13 @@ jobs:
           hugo-version: 'latest'
           extended: true
 
-      - name: Compute baseURL
-        id: baseurl
-        run: |
-          if [ -n "${{ inputs.BASE_URL }}" ]; then
-            echo "url=${{ inputs.BASE_URL }}" >> $GITHUB_OUTPUT
-          else
-            echo "url=https://$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{print tolower($1)}').github.io/$(echo "${GITHUB_REPOSITORY}" | awk -F/ '{print $2}')/" >> $GITHUB_OUTPUT
-          fi
+      - name: Build
+        run: hugo --minify
 
-      - name: Build Hugo
-        run: hugo --minify --baseURL "${{ steps.baseurl.outputs.url }}"
-
-      - name: Deploy built site to 'hugo-pages/<branch>'
+      - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
         with:
           personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
           publish_branch: hugo-pages
           destination_dir: ${{ inputs.GH_BRANCH }}
-          publish_dir: public
-
-  deploy-pages:
-    needs: create-pages
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-      contents: read
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: hugo-pages
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          external_repository: jijeeshhomelab/learningrepo
