@@ -32,21 +32,10 @@ jobs:
           echo "Submodule status:"
           git submodule status || true
 
-      - name: Quick sanity - show themes dir
-        run: |
-          ls -la
-          echo "---- themes ----"
-          ls -la themes || true
-          echo "---- aec ----"
-          ls -la themes/aec-documentation || true
-
       - name: Replace VERSION in main/_index.md (best-effort)
         run: |
           if [ -f main/_index.md ]; then
             sed -i "s/VERSION/${{ inputs.GH_BRANCH }}/" main/_index.md || true
-            echo "Patched VERSION in main/_index.md"
-          else
-            echo "main/_index.md not found; skipping"
           fi
 
       - name: Setup Hugo
