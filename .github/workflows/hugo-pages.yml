@@ -1,4 +1,4 @@
-name: Hugo Build (Reusable)
+name: Hugo Build And Deploy (Reusable)
 
 on:
   workflow_call:
@@ -6,7 +6,7 @@ on:
       GH_BRANCH:
         type: string
         required: true
-    # If your theme submodule is PRIVATE over HTTPS, uncomment secrets and the token line below.
+    # If your theme submodule is PRIVATE over HTTPS, you can accept a PAT from the caller:
     # secrets:
     #   PRIVATE_SUBMODULE_PAT:
     #     required: false
@@ -23,9 +23,10 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+          # If the submodule is PRIVATE via HTTPS, uncomment:
           # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
 
-      - name: Init submodules (recursive)
+      - name: Init submodules
         run: |
           git submodule sync --recursive
           git submodule update --init --recursive
@@ -35,12 +36,12 @@ jobs:
       - name: Verify theme folder exists (themes/aec-documentation)
         run: |
           if [ ! -d "themes/aec-documentation" ]; then
-            echo "ERROR: themes/aec-documentation not found. Check .gitmodules and access."
+            echo "ERROR: themes/aec-documentation not found. Check .gitmodules and submodule access."
             ls -la themes || true
             exit 1
           fi
 
-      - name: Verify Hugo config points to 'aec-documentation'
+      - name: Verify Hugo config points to aec-documentation
         run: |
           set -e
           if [ -f config.toml ]; then
@@ -54,9 +55,9 @@ import json, sys
 with open('config.json') as f: data=json.load(f)
 sys.exit(0 if data.get('theme')=='aec-documentation' else 2)
 PY
-            test $? -eq 0 || (echo 'ERROR: config.json must contain { "theme": "aec-documentation" }'; exit 1)
+            test $? -eq 0 || (echo 'ERROR: config.json must contain {"theme": "aec-documentation"}'; exit 1)
           else
-            echo "ERROR: No Hugo config (config.toml|yaml|yml|json) found."
+            echo "ERROR: No Hugo config found (config.toml|yaml|yml|json)."
             exit 1
           fi
 
@@ -79,3 +80,18 @@ PY
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
