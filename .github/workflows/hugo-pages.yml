@@ -10,24 +10,40 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    # Request only what you need here. The caller can elevate if needed.
     permissions:
       contents: read
 
     steps:
-      # IMPORTANT: don't pass a custom token here—use the caller repo's GITHUB_TOKEN
-      - name: Checkout caller repository
+      - name: Checkout caller repository (with submodules)
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: recursive
           fetch-depth: 0
+          # If your theme submodule is PRIVATE, uncomment and provide a PAT with repo scope:
+          # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
 
-      - name: Modify ace-documentation shortcode template to not require a page title
-        run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/shortcodes/childpages.html"
+      - name: Initialize submodules (belt-and-suspenders)
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
-      - name: Modify ace-documentation left navbar template to not require a page title
-        run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/partials/menu.html"
+      - name: Patch shortcode to not require page title
+        run: |
+          file="${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/shortcodes/childpages.html"
+          if [ -f "$file" ]; then
+            sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' "$file"
+          else
+            echo "Skipping: $file not found"
+          fi
+
+      - name: Patch left navbar to not require page title
+        run: |
+          file="${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/partials/menu.html"
+          if [ -f "$file" ]; then
+            sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' "$file"
+          else
+            echo "Skipping: $file not found"
+          fi
 
       - name: Ensure markup directory exists
         run: mkdir -p "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup"
@@ -64,7 +80,7 @@ jobs:
           {{ end }}
           EOF
 
-      - name: Insert mermaid snippet into docs theme
+      - name: Insert mermaid snippet into docs theme (best-effort)
         run: sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/single.html" || true
 
       - name: Create _index.md (Design)
@@ -99,7 +115,6 @@ jobs:
       - name: Build
         run: hugo --minify
 
-      # Upload the built site as an artifact, so the caller can decide how/where to deploy
       - name: Upload built site as artifact
         uses: actions/upload-artifact@v4
         with:
