@@ -1,4 +1,5 @@
 name: 📖 Deploy GitHub Pages Using Hugo
+
 on:
   workflow_call:
     secrets:
@@ -16,13 +17,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_ACTIONS_TOKEN }}
-          submodules: true  # Fetch Hugo themes (true OR recursive)
-          fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
+          submodules: true
+          fetch-depth: 0
 
-      - name: Modify ace-documentation shortcode template to not require a page title to be defined in YAML frontmatter
+      - name: Modify ace-documentation shortcode template to not require a page title
         run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/shortcodes/childpages.html
 
-      - name: Modify ace-documentation left navbar template to not require a page title to be defined in YAML frontmatter
+      - name: Modify ace-documentation left navbar template to not require a page title
         run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/partials/menu.html
 
       - name: Create a directory
@@ -31,13 +32,13 @@ jobs:
       - name: Create a markdown link render hook
         run: |
           cat << EOF > ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup/render-link.html
-          {{- \$link := .Destination }}
-          {{- \$url := urls.Parse \$link }}
-          {{- \$isRemote := \$url.IsAbs }}
-          {{- if and (not \$isRemote) (strings.HasSuffix \$url.Path ".md") }}
-            {{- \$link = relref .Page \$link }}
+          {{- $link := .Destination }}
+          {{- $url := urls.Parse $link }}
+          {{- $isRemote := $url.IsAbs }}
+          {{- if and (not $isRemote) (strings.HasSuffix $url.Path ".md") }}
+            {{- $link = relref .Page $link }}
           {{- end -}}
-          <a href="{{ \$link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if \$isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
+          <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
           EOF
 
       - name: Create a mermaid render hook
@@ -63,8 +64,9 @@ jobs:
       - name: insert mermaid snippet into docs theme
         run: sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/single.html
 
-      - name: Create _index.md
+      - name: Create _index.md (Design)
         run: |
+          mkdir -p design
           cat << EOF > design/_index.md
           ---
           title: Design Documents
@@ -72,8 +74,9 @@ jobs:
           {{< childpages >}}
           EOF
         
-      - name: Create _index.md
+      - name: Create _index.md (Work Instructions)
         run: |
+          mkdir -p workInstructions
           cat << EOF > workInstructions/_index.md
           ---
           title: Work Instructions
@@ -81,8 +84,8 @@ jobs:
           {{< childpages >}}
           EOF
           
-      - name: Append the branch/version name to index.html
-        run: sed -i 's/VERSION/${{ inputs.GH_BRANCH }}/' main/_index.md
+      - name: Append the branch/version name to index.md
+        run: sed -i 's/VERSION/${{ inputs.GH_BRANCH }}/' main/_index.md || true
         
       - run: cat ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/single.html
 
@@ -100,8 +103,9 @@ jobs:
         with:
           personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
           publish_branch: hugo-pages
-          destination_dir: ${{ inputs.GH_BRANCH }} # whatever branch the PR was merged onto
-          external_repository: jijeeshhomelab/learningrepo
+          destination_dir: ${{ inputs.GH_BRANCH }}
+          external_repository: jijeeshlab/learningrepo
+
   deploy-pages:
     needs: create-pages
     environment:
@@ -113,17 +117,14 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-         ref: hugo-pages
-      - name: Setup Pages
+     up Pages
         uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
           path: '.'
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
