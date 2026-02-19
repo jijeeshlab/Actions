@@ -6,7 +6,7 @@ on:
       GH_BRANCH:
         type: string
         required: true
-    # If your theme submodule is private over HTTPS, you can accept a PAT from the caller:
+    # If your theme submodule is private over HTTPS, accept a PAT:
     # secrets:
     #   PRIVATE_SUBMODULE_PAT:
     #     required: false
@@ -23,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          # If the theme submodule is PRIVATE via HTTPS, uncomment:
+          # If submodule is PRIVATE via HTTPS, uncomment:
           # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
 
       - name: Initialize submodules (recursive)
@@ -31,8 +31,12 @@ jobs:
           git submodule sync --recursive
           git submodule update --init --recursive
 
-      # Keep the site exactly like production: no childpages shortcode anywhere.
-      # We only replace VERSION in main/_index.md if present.
+      - name: Confirm theme folder
+        run: |
+          echo "Listing themes directory:"
+          ls -la themes || true
+          ls -la themes/aec-documentation || true
+
       - name: Replace VERSION in main/_index.md
         run: |
           if [ -f main/_index.md ]; then
@@ -66,8 +70,4 @@ jobs:
 
     steps:
       - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses:
