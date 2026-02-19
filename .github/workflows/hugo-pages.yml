@@ -6,8 +6,7 @@ on:
       GH_BRANCH:
         type: string
         required: true
-    # If your theme submodule is PRIVATE over HTTPS, accept a PAT from the caller and
-    # uncomment the "secrets" section below, and the "token:" field in checkout step.
+    # If your theme submodule is PRIVATE over HTTPS, accept a PAT from the caller and uncomment secrets:
     # secrets:
     #   PRIVATE_SUBMODULE_PAT:
     #     required: false
@@ -24,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          # If the theme submodule is PRIVATE via HTTPS, uncomment:
+          # If the theme submodule is PRIVATE via HTTPS, uncomment the next line:
           # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
 
       - name: Initialize submodules (recursive)
@@ -37,7 +36,7 @@ jobs:
       - name: Verify theme folder exists (themes/aec-documentation)
         run: |
           if [ ! -d "themes/aec-documentation" ]; then
-            echo "ERROR: themes/aec-documentation not found. Ensure the submodule exists in .gitmodules and is accessible."
+            echo "ERROR: themes/aec-documentation not found. Ensure the submodule exists and is accessible."
             echo "Contents of themes/:"
             ls -la themes || true
             exit 1
@@ -49,30 +48,19 @@ jobs:
         run: |
           set -e
           if [ -f config.toml ]; then
-            if ! grep -qiE '^\s*theme\s*=\s*"aec-documentation"' config.toml; then
-              echo "ERROR: config.toml must contain: theme = \"aec-documentation\""
-              exit 1
-            fi
+            grep -qiE '^\s*theme\s*=\s*"aec-documentation"' config.toml || (echo 'ERROR: config.toml must contain: theme = "aec-documentation"'; exit 1)
             echo "OK: config.toml points to aec-documentation"
           elif [ -f config.yaml ] || [ -f config.yml ]; then
             yml=$(ls -1 config.y*ml | head -n 1)
-            if ! grep -qiE '^\s*theme:\s*aec-documentation' "$yml"; then
-              echo "ERROR: $yml must contain: theme: aec-documentation"
-              exit 1
-            fi
+            grep -qiE '^\s*theme:\s*aec-documentation' "$yml" || (echo "ERROR: $yml must contain: theme: aec-documentation"; exit 1)
             echo "OK: $yml points to aec-documentation"
           elif [ -f config.json ]; then
             python - << 'PY'
 import json, sys
-p='config.json'
-with open(p) as f: data=json.load(f)
-ok = (data.get('theme') == 'aec-documentation')
-sys.exit(0 if ok else 2)
+with open('config.json') as f: data=json.load(f)
+sys.exit(0 if data.get('theme')=='aec-documentation' else 2)
 PY
-            if [ $? -ne 0 ]; then
-              echo 'ERROR: config.json must contain: { "theme": "aec-documentation" }'
-              exit 1
-            fi
+            test $? -eq 0 || (echo 'ERROR: config.json must contain: { "theme": "aec-documentation" }'; exit 1)
             echo "OK: config.json points to aec-documentation"
           else
             echo "ERROR: No Hugo config found (config.toml|yaml|yml|json). Add one with theme = aec-documentation."
@@ -102,16 +90,12 @@ PY
         with:
           path: public
 
-  deploy-pages:
+  deploy:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Setup Pages
