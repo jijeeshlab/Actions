@@ -1,4 +1,4 @@
-name: Deploy GitHub Pages Using Hugo
+name: Hugo Build (Reusable)
 
 on:
   workflow_call:
@@ -6,7 +6,7 @@ on:
       GH_BRANCH:
         type: string
         required: true
-    # If your theme submodule is PRIVATE over HTTPS, accept a PAT from the caller and uncomment secrets:
+    # If your theme submodule is PRIVATE over HTTPS, uncomment secrets and the token line below.
     # secrets:
     #   PRIVATE_SUBMODULE_PAT:
     #     required: false
@@ -18,15 +18,14 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout repository (with submodules)
+      - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
-          # If the theme submodule is PRIVATE via HTTPS, uncomment the next line:
           # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
 
-      - name: Initialize submodules (recursive)
+      - name: Init submodules (recursive)
         run: |
           git submodule sync --recursive
           git submodule update --init --recursive
@@ -36,34 +35,30 @@ jobs:
       - name: Verify theme folder exists (themes/aec-documentation)
         run: |
           if [ ! -d "themes/aec-documentation" ]; then
-            echo "ERROR: themes/aec-documentation not found. Ensure the submodule exists and is accessible."
-            echo "Contents of themes/:"
+            echo "ERROR: themes/aec-documentation not found. Check .gitmodules and access."
             ls -la themes || true
             exit 1
           fi
           echo "Theme folder found:"
           ls -la themes/aec-documentation || true
 
-      - name: Verify Hugo config points to theme 'aec-documentation'
+      - name: Verify Hugo config points to 'aec-documentation'
         run: |
           set -e
           if [ -f config.toml ]; then
-            grep -qiE '^\s*theme\s*=\s*"aec-documentation"' config.toml || (echo 'ERROR: config.toml must contain: theme = "aec-documentation"'; exit 1)
-            echo "OK: config.toml points to aec-documentation"
+            grep -qiE '^\s*theme\s*=\s*"aec-documentation"' config.toml || (echo 'ERROR: config.toml must contain theme = "aec-documentation"'; exit 1)
           elif [ -f config.yaml ] || [ -f config.yml ]; then
             yml=$(ls -1 config.y*ml | head -n 1)
-            grep -qiE '^\s*theme:\s*aec-documentation' "$yml" || (echo "ERROR: $yml must contain: theme: aec-documentation"; exit 1)
-            echo "OK: $yml points to aec-documentation"
+            grep -qiE '^\s*theme:\s*aec-documentation' "$yml" || (echo "ERROR: $yml must contain theme: aec-documentation"; exit 1)
           elif [ -f config.json ]; then
             python - << 'PY'
 import json, sys
 with open('config.json') as f: data=json.load(f)
 sys.exit(0 if data.get('theme')=='aec-documentation' else 2)
 PY
-            test $? -eq 0 || (echo 'ERROR: config.json must contain: { "theme": "aec-documentation" }'; exit 1)
-            echo "OK: config.json points to aec-documentation"
+            test $? -eq 0 || (echo 'ERROR: config.json must contain { "theme": "aec-documentation" }'; exit 1)
           else
-            echo "ERROR: No Hugo config found (config.toml|yaml|yml|json). Add one with theme = aec-documentation."
+            echo "ERROR: No Hugo config (config.toml|yaml|yml|json) found."
             exit 1
           fi
 
@@ -73,7 +68,7 @@ PY
             sed -i "s/VERSION/${{ inputs.GH_BRANCH }}/" main/_index.md || true
             echo "Patched VERSION in main/_index.md"
           else
-            echo "main/_index.md not found; skipping VERSION replacement"
+            echo "main/_index.md not found; skipping"
           fi
 
       - name: Setup Hugo
@@ -82,25 +77,10 @@ PY
           hugo-version: latest
           extended: true
 
-      - name: Build site
+      - name: Build
         run: hugo --minify
 
       - name: Upload artifact for Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-
-    steps:
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
