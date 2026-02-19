@@ -1,4 +1,4 @@
-name: Hugo Build (Reusable)
+name: Reusable Hugo Build
 
 on:
   workflow_call:
@@ -6,16 +6,14 @@ on:
       GH_BRANCH:
         type: string
         required: true
-    # If your theme submodule is PRIVATE over HTTPS, uncomment secrets and the token line below.
-    # secrets:
-    #   PRIVATE_SUBMODULE_PAT:
-    #     required: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      pages-artifact-uploaded: ${{ steps.artifact-upload.outcome }}
 
     steps:
       - name: Checkout (with submodules)
@@ -23,14 +21,19 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
 
-      - name: Init submodules (recursive)
+      - name: Initialize submodules (recursive)
         run: |
           git submodule sync --recursive
           git submodule update --init --recursive
-          echo "Submodule status:"
-          git submodule status || true
+
+      - name: Sanity — verify theme folder is present
+        run: |
+          if [ ! -d "themes/aec-documentation" ]; then
+            echo "ERROR: themes/aec-documentation not found. Check .gitmodules and access."
+            ls -la themes || true
+            exit 1
+          fi
 
       - name: Replace VERSION in main/_index.md (best-effort)
         run: |
@@ -44,10 +47,11 @@ jobs:
           hugo-version: latest
           extended: true
 
-      - name: Build
+      - name: Build site
         run: hugo --minify
 
-      - name: Upload artifact for Pages
+      - id: artifact-upload
+        name: Upload artifact for Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
