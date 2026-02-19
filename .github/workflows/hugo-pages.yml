@@ -39,8 +39,6 @@ jobs:
             ls -la themes || true
             exit 1
           fi
-          echo "Theme folder found:"
-          ls -la themes/aec-documentation || true
 
       - name: Verify Hugo config points to 'aec-documentation'
         run: |
@@ -66,9 +64,6 @@ PY
         run: |
           if [ -f main/_index.md ]; then
             sed -i "s/VERSION/${{ inputs.GH_BRANCH }}/" main/_index.md || true
-            echo "Patched VERSION in main/_index.md"
-          else
-            echo "main/_index.md not found; skipping"
           fi
 
       - name: Setup Hugo
