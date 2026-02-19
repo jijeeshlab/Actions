@@ -1,68 +1,48 @@
-name: 📖 Build Hugo Site
-
+name: 📖 Deploy GitHub Pages Using Hugo
 on:
   workflow_call:
+    secrets:
+      GH_ACTIONS_TOKEN:
+        required: true
     inputs:
       GH_BRANCH:
         type: string
         required: true
 
 jobs:
-  build:
+  create-pages:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout caller repository (with submodules)
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 0
-          # If your theme submodule is PRIVATE, uncomment and provide a PAT with repo scope:
-          # token: ${{ secrets.PRIVATE_SUBMODULE_PAT }}
+          token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          submodules: true  # Fetch Hugo themes (true OR recursive)
+          fetch-depth: 0    # Fetch all history for .GitInfo and .Lastmod
 
-      - name: Initialize submodules (belt-and-suspenders)
-        run: |
-          git submodule sync --recursive
-          git submodule update --init --recursive
+      - name: Modify ace-documentation shortcode template to not require a page title to be defined in YAML frontmatter
+        run: sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/shortcodes/childpages.html
 
-      - name: Patch shortcode to not require page title
-        run: |
-          file="${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/shortcodes/childpages.html"
-          if [ -f "$file" ]; then
-            sed -i 's/\.Title/\.File\.BaseFileName | humanize | title/' "$file"
-          else
-            echo "Skipping: $file not found"
-          fi
+      - name: Modify ace-documentation left navbar template to not require a page title to be defined in YAML frontmatter
+        run: sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/partials/menu.html
 
-      - name: Patch left navbar to not require page title
-        run: |
-          file="${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/partials/menu.html"
-          if [ -f "$file" ]; then
-            sed -i 's/\.LinkTitle/\.File\.BaseFileName | humanize | title/' "$file"
-          else
-            echo "Skipping: $file not found"
-          fi
-
-      - name: Ensure markup directory exists
-        run: mkdir -p "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup"
+      - name: Create a directory
+        run: mkdir -p "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup" 
 
       - name: Create a markdown link render hook
         run: |
-          cat << 'EOF' > "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup/render-link.html"
-          {{- $link := .Destination }}
-          {{- $url := urls.Parse $link }}
-          {{- $isRemote := $url.IsAbs }}
-          {{- if and (not $isRemote) (strings.HasSuffix $url.Path ".md") }}
-            {{- $link = relref .Page $link }}
+          cat << EOF > ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup/render-link.html
+          {{- \$link := .Destination }}
+          {{- \$url := urls.Parse \$link }}
+          {{- \$isRemote := \$url.IsAbs }}
+          {{- if and (not \$isRemote) (strings.HasSuffix \$url.Path ".md") }}
+            {{- \$link = relref .Page \$link }}
           {{- end -}}
-          <a href="{{ $link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if $isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
+          <a href="{{ \$link | safeURL }}"{{ with .Title}} title="{{ . }}"{{ end }}{{ if \$isRemote }} target="_blank"{{ end }}>{{ .Text | safeHTML }}</a>
           EOF
 
       - name: Create a mermaid render hook
         run: |
-          cat << 'EOF' > "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup/render-codeblock-mermaid.html"
+          cat << EOF > ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/_markup/render-codeblock-mermaid.html
           <div class="mermaid">
             {{- .Inner | safeHTML }}
           </div>
@@ -71,7 +51,7 @@ jobs:
 
       - name: Store mermaid config in temp file
         run: |
-          cat << 'EOF' > /tmp/mermaid.snippet
+          cat << EOF > /tmp/mermaid.snippet
           {{ if .Page.Store.Get "hasMermaid" }}
             <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
             <script>
@@ -80,31 +60,31 @@ jobs:
           {{ end }}
           EOF
 
-      - name: Insert mermaid snippet into docs theme (best-effort)
-        run: sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' "${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/single.html" || true
+      - name: insert mermaid snippet into docs theme
+        run: sed -i '/{{ .Content }}/r /tmp/mermaid.snippet' ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/single.html
 
-      - name: Create _index.md (Design)
+      - name: Create _index.md
         run: |
-          mkdir -p design
-          cat << 'EOF' > design/_index.md
+          cat << EOF > design/_index.md
           ---
           title: Design Documents
           ---
           {{< childpages >}}
           EOF
-
-      - name: Create _index.md (Work Instructions)
+        
+      - name: Create _index.md
         run: |
-          mkdir -p workInstructions
-          cat << 'EOF' > workInstructions/_index.md
+          cat << EOF > workInstructions/_index.md
           ---
           title: Work Instructions
           ---
           {{< childpages >}}
           EOF
-
-      - name: Append the branch/version name to index.md
-        run: sed -i "s/VERSION/${{ inputs.GH_BRANCH }}/" main/_index.md || true
+          
+      - name: Append the branch/version name to index.html
+        run: sed -i 's/VERSION/${{ inputs.GH_BRANCH }}/' main/_index.md
+        
+      - run: cat ${GITHUB_WORKSPACE}/themes/ace-documentation/layouts/_default/single.html
 
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
@@ -115,8 +95,35 @@ jobs:
       - name: Build
         run: hugo --minify
 
-      - name: Upload built site as artifact
-        uses: actions/upload-artifact@v4
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          name: hugo-site
-          path: public
+          personal_token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          publish_branch: hugo-pages
+          destination_dir: ${{ inputs.GH_BRANCH }} # whatever branch the PR was merged onto
+          external_repository: jijeeshlab/learningrepo
+  deploy-pages:
+    needs: create-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+         ref: hugo-pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload entire repository
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
