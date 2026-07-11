@@ -1,0 +1,132 @@
+name: Reusable Documentation Impact Workflow
+
+on:
+  workflow_call:
+    inputs:
+      documentation_repo:
+        required: true
+        type: string
+
+      documentation_dispatch_event:
+        required: false
+        type: string
+        default: documentation_update_requested
+
+    secrets:
+      DOC_AUTOMATION_PAT:
+        required: true
+
+jobs:
+
+  detect-documentation-impact:
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Actions Repository
+        uses: actions/checkout@v4
+        with:
+          repository: jijeeshlab/Actions
+          path: _actions
+          fetch-depth: 1
+
+      - name: Show Context
+        run: |
+          echo "Repository : ${{ github.repository }}"
+          echo "PR Number  : ${{ github.event.pull_request.number }}"
+          echo "Base SHA   : ${{ github.event.pull_request.base.sha }}"
+          echo "Head SHA   : ${{ github.event.pull_request.head.sha }}"
+
+      - name: Generate Changed File List
+        run: |
+
+          git diff \
+            ${{ github.event.pull_request.base.sha }} \
+            ${{ github.event.pull_request.head.sha }} \
+            --name-only \
+            > changed-files.txt
+
+          echo ""
+          echo "Files detected:"
+          cat changed-files.txt
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          pip install pyyaml
+
+      - name: Detect Documentation Impact
+        env:
+          SOURCE_REPO: ${{ github.event.repository.name }}
+          SOURCE_REPO_FULL: ${{ github.repository }}
+          SOURCE_PR_NUMBER: ${{ github.event.pull_request.number }}
+          SOURCE_PR_TITLE: ${{ github.event.pull_request.title }}
+          SOURCE_PR_URL: ${{ github.event.pull_request.html_url }}
+          SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SOURCE_HEAD_REF: ${{ github.head_ref }}
+          SOURCE_BASE_REF: ${{ github.base_ref }}
+        run: |
+
+          python _actions/scripts/detect-impact.py
+
+      - name: Display Documentation Request
+        run: |
+
+          echo ""
+          echo "Generated doc-request.json"
+          echo ""
+
+          cat doc-request.json
+
+      - name: Upload Documentation Request
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-request
+          path: doc-request.json
+
+      - name: Create Dispatch Payload
+        run: |
+
+          python _actions/scripts/create-doc-request.py
+
+      - name: Display Dispatch Payload
+        run: |
+
+          echo ""
+          echo "Dispatch Payload"
+          echo ""
+
+          cat dispatch-payload.json
+
+      - name: Send To Documentation Repository
+        env:
+          GH_TOKEN: ${{ secrets.DOC_AUTOMATION_PAT }}
+        run: |
+
+          gh api \
+            repos/${{ inputs.documentation_repo }}/dispatches \
+            --method POST \
+            --input dispatch-payload.json
+
+      - name: Workflow Complete
+        run: |
+
+          echo ""
+          echo "Documentation request sent successfully."
+          echo ""
+          echo "Target Repository:"
+          echo "${{ inputs.documentation_repo }}"
