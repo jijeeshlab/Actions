@@ -27,12 +27,28 @@ def build_dispatch_payload(
 ):
 
     return {
-        "event_type":
-            "documentation_update_requested",
-
-        "client_payload":
-            request
-    }
+2
+"event_type": "documentation_update_requested",
+3
+"client_payload": {
+4
+"source_repo": request.get("source_repo"),
+5
+"source_repo_full": request.get("source_repo_full"),
+6
+"source_pr_number": request.get("source_pr_number"),
+7
+"source_pr_title": request.get("source_pr_title"),
+8
+"source_pr_url": request.get("source_pr_url"),
+9
+"changed_files": request.get("changed_files"),
+10
+"impacted_services": request.get("impacted_services")
+11
+}
+12
+}
 
 
 def save_dispatch_payload(
