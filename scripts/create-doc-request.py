@@ -33,53 +33,35 @@ def build_dispatch_payload(request):
 
         impacted_services.append(
             {
-                "service": svc.get(
-                    "service"
-                ),
-                "hld": svc.get(
-                    "hld"
-                ),
-                "lld": svc.get(
-                    "lld"
+                "service": svc.get("service"),
+                "documents": svc.get("documents", ["HLD", "LLD"]),
+                "hld": svc.get("hld"),
+                "lld": svc.get("lld"),
+                "changed_files": svc.get(
+                    "changed_files",
+                    []
+                ) or (
+                    [svc.get("changed_file")]
+                    if svc.get("changed_file")
+                    else []
                 )
             }
         )
 
     return {
-        "event_type":
-            "documentation_update_requested",
-
+        "event_type": "documentation_update_requested",
         "client_payload": {
-
-            "source_repo":
-                request.get(
-                    "source_repo"
-                ),
-
-            "source_repo_full":
-                request.get(
-                    "source_repo_full"
-                ),
-
-            "source_pr_number":
-                request.get(
-                    "source_pr_number"
-                ),
-
-            "source_pr_title":
-                request.get(
-                    "source_pr_title"
-                ),
-
-            "impacted_services":
-                impacted_services
+            "source_repo": request.get("source_repo"),
+            "source_repo_full": request.get("source_repo_full"),
+            "source_pr_number": request.get("source_pr_number"),
+            "source_pr_title": request.get("source_pr_title"),
+            "changed_files": request.get("changed_files", []),
+            "impacted_services": impacted_services
         }
     }
 
 
-def save_dispatch_payload(
-    payload
-):
+def save_dispatch_payload(payload):
 
     with open(
         OUTPUT_FILE,
