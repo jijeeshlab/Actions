@@ -23,9 +23,7 @@ def read_json(path: Path) -> dict:
         return json.load(file)
 
 
-def inspect_python_file(
-    file_path: Path
-) -> dict:
+def inspect_python_file(file_path: Path) -> dict:
 
     if not file_path.exists():
         return {
@@ -40,7 +38,6 @@ def inspect_python_file(
     )
 
     try:
-
         tree = ast.parse(content)
 
     except SyntaxError:
@@ -68,38 +65,26 @@ def inspect_python_file(
                         arg.arg
                         for arg in node.args.args
                     ],
-                    "returns":
-                        ast.unparse(node.returns)
-                        if node.returns
-                        else "",
-                    "docstring":
-                        ast.get_docstring(node)
-                        or "",
+                    "returns": ast.unparse(node.returns) if node.returns else "",
+                    "docstring": ast.get_docstring(node) or "",
                 }
             )
 
     return {
         "file": str(file_path),
         "exists": True,
-        "module_docstring":
-            ast.get_docstring(tree)
-            or "",
-        "functions":
-            functions,
+        "module_docstring": ast.get_docstring(tree) or "",
+        "functions": functions,
     }
 
 
-def inspect_changed_files(
-    changed_files: list[str]
-) -> list[dict]:
+def inspect_changed_files(changed_files: list[str]) -> list[dict]:
 
     summaries = []
 
     for changed_file in changed_files:
 
-        source_file = (
-            SOURCE_DIR / changed_file
-        )
+        source_file = SOURCE_DIR / changed_file
 
         summaries.append(
             inspect_python_file(
@@ -110,12 +95,10 @@ def inspect_changed_files(
     return summaries
 
 
-def bullet_list(
-    items: list[str]
-) -> str:
+def bullet_list(items: list[str]) -> str:
 
     if not items:
-        return "- Not identified."
+        return "- To Be Determined (TBD)"
 
     return "\n".join(
         [
@@ -125,11 +108,9 @@ def bullet_list(
     )
 
 
-def get_function_names(
-    summaries: list[dict]
-) -> list[str]:
+def function_names(summaries: list[dict]) -> list[str]:
 
-    names = []
+    output = []
 
     for summary in summaries:
 
@@ -138,44 +119,57 @@ def get_function_names(
             []
         ):
 
-            names.append(
-                function["name"]
+            output.append(
+                f"`{function['name']}()`"
             )
 
-    return names
+    return output
 
 
-def get_module_descriptions(
-    summaries: list[dict]
-) -> list[str]:
+def component_descriptions(summaries: list[dict]) -> list[str]:
 
-    descriptions = []
+    output = []
 
     for summary in summaries:
 
-        docstring = summary.get(
+        file_name = (
+            summary.get(
+                "file",
+                ""
+            )
+            .replace(
+                "source/",
+                ""
+            )
+        )
+
+        module_docstring = summary.get(
             "module_docstring",
             ""
         )
 
-        if docstring:
-            descriptions.append(
-                docstring
+        if module_docstring:
+            output.append(
+                f"**{file_name}**: {module_docstring}"
+            )
+        else:
+            output.append(
+                f"**{file_name}**: Source module detected."
             )
 
-    return descriptions
+    return output
 
 
-def infer_service_overview(
-    service: str,
+def infer_overview(
+    service_name: str,
     summaries: list[dict]
 ) -> str:
 
-    content = []
+    combined = []
 
     for summary in summaries:
 
-        content.append(
+        combined.append(
             summary.get(
                 "module_docstring",
                 ""
@@ -187,221 +181,140 @@ def infer_service_overview(
             []
         ):
 
-            content.append(
+            combined.append(
                 function.get(
                     "name",
                     ""
                 )
             )
 
-    combined = (
-        " ".join(content)
-        .lower()
-    )
+            combined.append(
+                function.get(
+                    "docstring",
+                    ""
+                )
+            )
 
-    if "network" in combined:
+    text = " ".join(combined).lower()
+
+    if "network" in text or "vpn" in text or "load_balancer" in text or "dns" in text:
         return (
-            "Provides automated network "
-            "deployment, connectivity and "
-            "security services."
+            "The greenfield network capability provides automated deployment "
+            "of cloud networking services including zero-trust network provisioning, "
+            "network segmentation validation, load balancer deployment, DNS integration, "
+            "VPN gateway deployment, and storage gateway connectivity."
         )
 
-    if "vpn" in combined:
+    if "security" in text or "key" in text or "kms" in text or "vault" in text:
         return (
-            "Provides hybrid cloud "
-            "connectivity services."
-        )
-
-    if "storage" in combined:
-        return (
-            "Provides storage automation "
-            "services."
+            "The security compliance capability provides automated security enforcement, "
+            "key management, and compliance integration for cloud infrastructure services."
         )
 
     return (
-        f"{service} provides "
-        f"automated infrastructure "
-        f"services."
+        f"The {service_name} capability provides automated infrastructure services "
+        "detected from source repository changes."
     )
 
 
 def build_hld(
     service_info: dict,
+    request: dict,
     summaries: list[dict]
 ) -> str:
 
-    service_name = (
-        service_info["service"]
+    service_name = service_info["service"]
+    today = date.today().isoformat()
+
+    source_repo = request.get(
+        "source_repo_full",
+        "TBD"
     )
 
-    overview = (
-        infer_service_overview(
-            service_name,
-            summaries
-        )
+    source_pr_number = request.get(
+        "source_pr_number",
+        "TBD"
     )
 
-    functions = (
-        get_function_names(
-            summaries
-        )
+    source_pr_title = request.get(
+        "source_pr_title",
+        "TBD"
     )
 
-    modules = (
-        get_module_descriptions(
-            summaries
-        )
-    )
-
-    today = (
-        date.today()
-        .isoformat()
-    )
-
-    lines = [
-
-        f"# High-Level Design (HLD): {service_name}",
-        "",
-        "**Author:** Documentation Automation",
-        "",
-        f"**Date:** {today}",
-        "",
-        "**Version:** 1.0",
-        "",
-        "---",
-        "",
-        "# 1. Introduction",
-        "",
-        "## 1.1 Overview",
-        "",
-        overview,
-        "",
-        "## 1.2 Scope",
-        "",
-        "### In Scope",
-        "",
-        bullet_list(functions),
-        "",
-        "### Out of Scope",
-        "",
-        "- Functionality not identified from source code.",
-        "",
-        "---",
-        "",
-        "# 2. Business Requirements",
-        "",
-        bullet_list(functions),
-        "",
-        "---",
-        "",
-        "# 3. System Architecture",
-        "",
-        "## 3.1 Architecture Overview",
-        "",
-        "```text",
-        "Source Repository",
-        "       |",
-        "       v",
-        "Documentation Generation",
-        "       |",
-        "       v",
-        "Generated HLD",
-        "```",
-        "",
-        "## 3.2 Components",
-        "",
-        bullet_list(modules),
-        "",
-        "---",
-        "",
-        "# 4. Data Flow",
-        "",
-        "Source Code -> Documentation Pipeline -> HLD",
-        "",
-        "---",
-        "",
-        "# 5. Integrations",
-        "",
-        "- GitHub",
-        "- GitHub Actions",
-        "- Documentation-as-Code",
-        "",
-        "---",
-        "",
-        "# 6. Security",
-        "",
-        "- Security review required.",
-        "- Access control TBD.",
-        "- Audit logging TBD.",
-        "",
-        "---",
-        "",
-        "# 7. Operations",
-        "",
-        "- Automated GitHub Actions execution",
-        "- Generated documentation lifecycle",
-        "",
-        "---",
-        "",
-        "# 8. Risks",
-        "",
-        "- Generated content may require manual review.",
-        "- Business requirements may not be fully visible in source code.",
-        "",
-        "---",
-        "",
-        "# 9. Open Questions",
-        "",
-        "- Additional integrations required?",
-        "- Additional business requirements?"
-    ]
-
-    return "\n".join(lines)
-
-
-def main():
-
-    request = read_json(
-        DOC_REQUEST_FILE
-    )
-
-    services = request.get(
-        "impacted_services",
+    changed_files = service_info.get(
+        "changed_files",
         []
-    )
-
-    changed_files = request.get(
+    ) or request.get(
         "changed_files",
         []
     )
 
-    summaries = inspect_changed_files(
-        changed_files
+    functions = function_names(
+        summaries
     )
 
-    for service in services:
+    components = component_descriptions(
+        summaries
+    )
 
-        output_file = Path(
-            service["hld"]
-        )
+    overview = infer_overview(
+        service_name,
+        summaries
+    )
 
-        output_file.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        output_file.write_text(
-            build_hld(
-                service,
-                summaries
-            ),
-            encoding="utf-8"
-        )
-
-        print(
-            f"HLD generated: {output_file}"
-        )
-
-
-if __name__ == "__main__":
-    main()
+    lines = [
+        f"# High-Level Design (HLD): {service_name}",
+        "",
+        "**Author**: Jijeesh Valappil",
+        f"**Date**: {today}",
+        "**Version**: 1.0",
+        "",
+        "---",
+        "",
+        "## 1. Introduction",
+        "",
+        "### 1.1. Overview",
+        overview,
+        "",
+        f"This document was generated from source repository `{source_repo}` and pull request `{source_pr_number}`.",
+        "",
+        f"**Source PR Title**: {source_pr_title}",
+        "",
+        "### 1.2. Scope",
+        "#### 1.2.1. In Scope",
+        bullet_list(functions),
+        "",
+        "#### 1.2.2. Out of Scope",
+        "- Manual deployment steps not represented in the source code.",
+        "- Production approval and final architecture sign-off.",
+        "- Runtime environment configuration not visible in the changed source files.",
+        "",
+        "### 1.3. Goals and Objectives",
+        "- Keep architecture documentation synchronized with source code changes.",
+        "- Reduce documentation drift between implementation and MkDocs content.",
+        "- Provide reviewable HLD documentation through the Documentation-as-Code pipeline.",
+        "- Establish source-to-document traceability.",
+        "",
+        "### 1.4. Acronyms and Abbreviations",
+        "| Term | Definition |",
+        "|------|------------|",
+        "| HLD | High-Level Design |",
+        "| LLD | Low-Level Design |",
+        "| PR | Pull Request |",
+        "| CI/CD | Continuous Integration and Continuous Deployment |",
+        "| Docs-as-Code | Documentation managed through Git, Markdown, pull requests, and automation |",
+        "",
+        "---",
+        "",
+        "## 2. Requirements",
+        "",
+        "### 2.1. Functional Requirements",
+        bullet_list(functions),
+        "",
+        "### 2.2. Non-Functional Requirements (NFRs)",
+        "- **Performance**: To Be Determined (TBD)",
+        "- **Scalability**: To Be Determined (TBD)",
+        "- **Availability/Reliability**: To Be Determined (TBD)",
+        "- **Security**: Review required before publishing.",
+        "- **Maintainability**: Generated documentation must remain Markdown-based and reviewable.",
+        "- **Usability**: Documentation must be accessible from the MkDocs portal.
