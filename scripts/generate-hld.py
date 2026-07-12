@@ -9,6 +9,7 @@ SOURCE_DIR = Path("source")
 
 
 def read_json(path: Path) -> dict:
+
     if not path.exists():
         raise FileNotFoundError(
             f"Required file not found: {path}"
@@ -18,6 +19,7 @@ def read_json(path: Path) -> dict:
         "r",
         encoding="utf-8"
     ) as file:
+
         return json.load(file)
 
 
@@ -38,6 +40,7 @@ def inspect_python_file(
     )
 
     try:
+
         tree = ast.parse(content)
 
     except SyntaxError:
@@ -150,16 +153,14 @@ def get_module_descriptions(
 
     for summary in summaries:
 
-        module_docstring = (
-            summary.get(
-                "module_docstring",
-                ""
-            )
+        docstring = summary.get(
+            "module_docstring",
+            ""
         )
 
-        if module_docstring:
+        if docstring:
             descriptions.append(
-                module_docstring
+                docstring
             )
 
     return descriptions
@@ -170,38 +171,39 @@ def infer_service_overview(
     summaries: list[dict]
 ) -> str:
 
-    combined_text = " ".join(
-        [
+    content = []
+
+    for summary in summaries:
+
+        content.append(
             summary.get(
                 "module_docstring",
                 ""
             )
-            for summary in summaries
-        ]
-    ).lower()
+        )
 
-    combined_functions = " ".join(
-        [
-            function.get("name", "")
-            for summary in summaries
-            for function in summary.get(
-                "functions",
-                []
+        for function in summary.get(
+            "functions",
+            []
+        ):
+
+            content.append(
+                function.get(
+                    "name",
+                    ""
+                )
             )
-        ]
-    ).lower()
 
     combined = (
-        f"{combined_text} "
-        f"{combined_functions}"
+        " ".join(content)
+        .lower()
     )
 
     if "network" in combined:
         return (
             "Provides automated network "
-            "deployment, segmentation, "
-            "security and connectivity "
-            "capabilities."
+            "deployment, connectivity and "
+            "security services."
         )
 
     if "vpn" in combined:
@@ -213,7 +215,7 @@ def infer_service_overview(
     if "storage" in combined:
         return (
             "Provides storage automation "
-            "and storage gateway services."
+            "services."
         )
 
     return (
@@ -239,13 +241,13 @@ def build_hld(
         )
     )
 
-    function_names = (
+    functions = (
         get_function_names(
             summaries
         )
     )
 
-    module_descriptions = (
+    modules = (
         get_module_descriptions(
             summaries
         )
@@ -256,73 +258,150 @@ def build_hld(
         .isoformat()
     )
 
-    return f"""# High-Level Design (HLD): {service_name}
+    lines = [
 
-**Author**: Documentation Automation
+        f"# High-Level Design (HLD): {service_name}",
+        "",
+        "**Author:** Documentation Automation",
+        "",
+        f"**Date:** {today}",
+        "",
+        "**Version:** 1.0",
+        "",
+        "---",
+        "",
+        "# 1. Introduction",
+        "",
+        "## 1.1 Overview",
+        "",
+        overview,
+        "",
+        "## 1.2 Scope",
+        "",
+        "### In Scope",
+        "",
+        bullet_list(functions),
+        "",
+        "### Out of Scope",
+        "",
+        "- Functionality not identified from source code.",
+        "",
+        "---",
+        "",
+        "# 2. Business Requirements",
+        "",
+        bullet_list(functions),
+        "",
+        "---",
+        "",
+        "# 3. System Architecture",
+        "",
+        "## 3.1 Architecture Overview",
+        "",
+        "```text",
+        "Source Repository",
+        "       |",
+        "       v",
+        "Documentation Generation",
+        "       |",
+        "       v",
+        "Generated HLD",
+        "```",
+        "",
+        "## 3.2 Components",
+        "",
+        bullet_list(modules),
+        "",
+        "---",
+        "",
+        "# 4. Data Flow",
+        "",
+        "Source Code -> Documentation Pipeline -> HLD",
+        "",
+        "---",
+        "",
+        "# 5. Integrations",
+        "",
+        "- GitHub",
+        "- GitHub Actions",
+        "- Documentation-as-Code",
+        "",
+        "---",
+        "",
+        "# 6. Security",
+        "",
+        "- Security review required.",
+        "- Access control TBD.",
+        "- Audit logging TBD.",
+        "",
+        "---",
+        "",
+        "# 7. Operations",
+        "",
+        "- Automated GitHub Actions execution",
+        "- Generated documentation lifecycle",
+        "",
+        "---",
+        "",
+        "# 8. Risks",
+        "",
+        "- Generated content may require manual review.",
+        "- Business requirements may not be fully visible in source code.",
+        "",
+        "---",
+        "",
+        "# 9. Open Questions",
+        "",
+        "- Additional integrations required?",
+        "- Additional business requirements?"
+    ]
 
-**Date**: {today}
+    return "\n".join(lines)
 
-**Version**: 1.0
 
----
+def main():
 
-# 1. Introduction
+    request = read_json(
+        DOC_REQUEST_FILE
+    )
 
-## 1.1 Overview
+    services = request.get(
+        "impacted_services",
+        []
+    )
 
-{overview}
+    changed_files = request.get(
+        "changed_files",
+        []
+    )
 
-## 1.2 Scope
+    summaries = inspect_changed_files(
+        changed_files
+    )
 
-### In Scope
+    for service in services:
 
-{bullet_list(function_names)}
+        output_file = Path(
+            service["hld"]
+        )
 
-### Out of Scope
+        output_file.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
 
-- Functionality not identified from source code.
+        output_file.write_text(
+            build_hld(
+                service,
+                summaries
+            ),
+            encoding="utf-8"
+        )
 
-## 1.3 Goals and Objectives
+        print(
+            f"HLD generated: {output_file}"
+        )
 
-- Infrastructure automation
-- Standardized deployments
-- Documentation-as-Code
 
-## 1.4 Acronyms and Abbreviations
-
-| Term | Definition |
-|------|------------|
-| HLD | High Level Design |
-| LLD | Low Level Design |
-
----
-
-# 2. Requirements
-
-## 2.1 Functional Requirements
-
-{bullet_list(function_names)}
-
-## 2.2 Non-Functional Requirements
-
-- Performance: TBD
-- Scalability: TBD
-- Availability: TBD
-- Security: TBD
-- Maintainability: TBD
-- Usability: TBD
-
----
-
-# 3. System Architecture
-
-## 3.1 Architectural Diagram
-
-```text
-Source Repository
-        |
-        v
-Documentation Pipeline
-        |
-        v
-Generated HLD / LLD
+if __name__ == "__main__":
+    main()
