@@ -24,10 +24,7 @@ def read_json(path: Path) -> dict:
             f"Required file not found: {path}"
         )
 
-    with path.open(
-        "r",
-        encoding="utf-8"
-    ) as file:
+    with path.open("r", encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -44,50 +41,40 @@ def read_text_file(path: Path) -> str:
 def load_agents() -> dict:
     agents = {}
 
-    for agent_name, agent_path in AGENT_FILES.items():
-        agents[agent_name] = read_text_file(
-            agent_path
-        )
+    for agent_key, agent_path in AGENT_FILES.items():
+        agents[agent_key] = read_text_file(agent_path)
 
     return agents
 
 
-def agent_status(
-    agents: dict,
-    key: str
-) -> str:
-    return "Yes" if agents.get(key) else "No"
+def agent_loaded(agents: dict, agent_key: str) -> str:
+    if agents.get(agent_key):
+        return "Yes"
+
+    return "No"
 
 
-def agent_summary(
-    agents: dict,
-    key: str
-) -> str:
-    content = agents.get(
-        key,
-        ""
-    )
+def agent_summary(agents: dict, agent_key: str) -> str:
+    content = agents.get(agent_key, "")
 
     if not content:
-        return "Agent file not loaded."
+        return "Agent file was not loaded."
 
-    lines = [
-        line.strip()
-        for line in content.splitlines()
-        if line.strip()
-    ]
+    lines = []
+
+    for line in content.splitlines():
+        clean_line = line.strip()
+
+        if clean_line:
+            lines.append(clean_line)
 
     if not lines:
-        return "Agent file loaded but empty."
+        return "Agent file was loaded but it is empty."
 
-    return " ".join(
-        lines[:5]
-    )
+    return " ".join(lines[:6])
 
 
-def inspect_python_file(
-    file_path: Path
-) -> dict:
+def inspect_python_file(file_path: Path) -> dict:
     if not file_path.exists():
         return {
             "file": str(file_path),
@@ -103,10 +90,7 @@ def inspect_python_file(
     )
 
     try:
-        tree = ast.parse(
-            content
-        )
-
+        tree = ast.parse(content)
     except SyntaxError:
         return {
             "file": str(file_path),
@@ -118,26 +102,24 @@ def inspect_python_file(
 
     functions = []
 
-    for node in ast.walk(
-        tree
-    ):
-        if isinstance(
-            node,
-            ast.FunctionDef
-        ):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            function_args = []
+
+            for arg in node.args.args:
+                function_args.append(arg.arg)
+
+            return_type = ""
+
+            if node.returns:
+                return_type = ast.unparse(node.returns)
+
             functions.append(
                 {
                     "name": node.name,
-                    "args": [
-                        arg.arg
-                        for arg in node.args.args
-                    ],
-                    "returns": ast.unparse(
-                        node.returns
-                    ) if node.returns else "",
-                    "docstring": ast.get_docstring(
-                        node
-                    ) or "",
+                    "args": function_args,
+                    "returns": return_type,
+                    "docstring": ast.get_docstring(node) or "",
                 }
             )
 
@@ -145,16 +127,12 @@ def inspect_python_file(
         "file": str(file_path),
         "type": "python",
         "exists": True,
-        "module_docstring": ast.get_docstring(
-            tree
-        ) or "",
+        "module_docstring": ast.get_docstring(tree) or "",
         "functions": functions,
     }
 
 
-def inspect_shell_file(
-    file_path: Path
-) -> dict:
+def inspect_shell_file(file_path: Path) -> dict:
     if not file_path.exists():
         return {
             "file": str(file_path),
@@ -173,12 +151,10 @@ def inspect_shell_file(
 
     pattern = re.compile(
         r"^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\)\s*\{",
-        re.MULTILINE
+        re.MULTILINE,
     )
 
-    for match in pattern.finditer(
-        content
-    ):
+    for match in pattern.finditer(content):
         functions.append(
             {
                 "name": match.group(1),
@@ -197,9 +173,7 @@ def inspect_shell_file(
     }
 
 
-def inspect_generic_file(
-    file_path: Path
-) -> dict:
+def inspect_generic_file(file_path: Path) -> dict:
     return {
         "file": str(file_path),
         "type": "generic",
@@ -209,69 +183,46 @@ def inspect_generic_file(
     }
 
 
-def inspect_source_file(
-    changed_file: str
-) -> dict:
+def inspect_source_file(changed_file: str) -> dict:
     source_file = SOURCE_DIR / changed_file
 
-    if changed_file.endswith(
-        ".py"
-    ):
-        return inspect_python_file(
-            source_file
-        )
+    if changed_file.endswith(".py"):
+        return inspect_python_file(source_file)
 
-    if changed_file.endswith(
-        ".sh"
-    ):
-        return inspect_shell_file(
-            source_file
-        )
+    if changed_file.endswith(".sh"):
+        return inspect_shell_file(source_file)
 
-    return inspect_generic_file(
-        source_file
-    )
+    return inspect_generic_file(source_file)
 
 
-def inspect_changed_files(
-    changed_files: list[str]
-) -> list[dict]:
+def inspect_changed_files(changed_files: list[str]) -> list[dict]:
     summaries = []
 
     for changed_file in changed_files:
         summaries.append(
-            inspect_source_file(
-                changed_file
-            )
+            inspect_source_file(changed_file)
         )
 
     return summaries
 
 
-def bullet_list(
-    items: list[str]
-) -> str:
+def bullet_list(items: list[str]) -> str:
     if not items:
         return "- To Be Determined (TBD)"
 
-    return "\n".join(
-        [
-            f"- {item}"
-            for item in items
-        ]
-    )
+    lines = []
+
+    for item in items:
+        lines.append(f"- {item}")
+
+    return "\n".join(lines)
 
 
-def function_names(
-    summaries: list[dict]
-) -> list[str]:
+def function_names(summaries: list[dict]) -> list[str]:
     names = []
 
     for summary in summaries:
-        for function in summary.get(
-            "functions",
-            []
-        ):
+        for function in summary.get("functions", []):
             names.append(
                 f"`{function['name']}()`"
             )
@@ -279,24 +230,14 @@ def function_names(
     return names
 
 
-def component_descriptions(
-    summaries: list[dict]
-) -> list[str]:
+def component_descriptions(summaries: list[dict]) -> list[str]:
     components = []
 
     for summary in summaries:
-        file_name = summary.get(
-            "file",
-            ""
-        ).replace(
-            "source/",
-            ""
-        )
+        file_name = summary.get("file", "")
+        file_name = file_name.replace("source/", "")
 
-        file_type = summary.get(
-            "type",
-            "unknown"
-        )
+        file_type = summary.get("type", "unknown")
 
         module_docstring = summary.get(
             "module_docstring",
@@ -315,4 +256,29 @@ def component_descriptions(
     return components
 
 
-def
+def function_detail_blocks(summaries: list[dict]) -> str:
+    lines = []
+
+    for summary in summaries:
+        file_name = summary.get("file", "")
+        file_name = file_name.replace("source/", "")
+
+        lines.append(f"### Source File: `{file_name}`")
+        lines.append("")
+
+        functions = summary.get("functions", [])
+
+        if not functions:
+            lines.append("No functions detected in this file.")
+            lines.append("")
+            continue
+
+        for function in functions:
+            args = ", ".join(
+                function.get("args", [])
+            )
+
+            if not args:
+                args = "None"
+
+           
