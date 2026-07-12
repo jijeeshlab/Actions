@@ -114,7 +114,7 @@ def bullet_list(
 ) -> str:
 
     if not items:
-        return "- Not identified."
+        return "- To Be Determined (TBD)"
 
     return "\n".join(
         [
@@ -124,7 +124,7 @@ def bullet_list(
     )
 
 
-def get_function_names(
+def function_names(
     summaries: list[dict]
 ) -> list[str]:
 
@@ -138,17 +138,17 @@ def get_function_names(
         ):
 
             names.append(
-                function["name"]
+                f"`{function['name']}()`"
             )
 
     return names
 
 
-def build_function_section(
+def build_component_breakdown(
     summaries: list[dict]
 ) -> str:
 
-    sections = []
+    lines = []
 
     for summary in summaries:
 
@@ -163,11 +163,11 @@ def build_function_section(
             )
         )
 
-        sections.append(
-            f"## Source File: {file_name}"
+        lines.append(
+            f"### Source File: `{file_name}`"
         )
 
-        sections.append("")
+        lines.append("")
 
         functions = summary.get(
             "functions",
@@ -176,11 +176,11 @@ def build_function_section(
 
         if not functions:
 
-            sections.append(
+            lines.append(
                 "No functions detected."
             )
 
-            sections.append("")
+            lines.append("")
             continue
 
         for function in functions:
@@ -202,35 +202,30 @@ def build_function_section(
                 or "No documentation available."
             )
 
-            sections.append(
-                f"### Function: {function['name']}"
+            lines.append(
+                f"#### Function: `{function['name']}`"
             )
 
-            sections.append("")
-
-            sections.append(
+            lines.append("")
+            lines.append(
                 f"**Description:** {docstring}"
             )
-
-            sections.append("")
-
-            sections.append(
+            lines.append("")
+            lines.append(
                 f"**Parameters:** {args}"
             )
-
-            sections.append("")
-
-            sections.append(
+            lines.append("")
+            lines.append(
                 f"**Returns:** {returns}"
             )
+            lines.append("")
 
-            sections.append("")
-
-    return "\n".join(sections)
+    return "\n".join(lines)
 
 
 def build_lld(
     service_info: dict,
+    request: dict,
     summaries: list[dict]
 ) -> str:
 
@@ -243,21 +238,47 @@ def build_lld(
         .isoformat()
     )
 
-    function_names = (
-        get_function_names(
-            summaries
+    source_repo = request.get(
+        "source_repo_full",
+        "TBD"
+    )
+
+    source_pr_number = request.get(
+        "source_pr_number",
+        "TBD"
+    )
+
+    source_pr_title = request.get(
+        "source_pr_title",
+        "TBD"
+    )
+
+    changed_files = (
+        service_info.get(
+            "changed_files",
+            []
         )
+        or request.get(
+            "changed_files",
+            []
+        )
+    )
+
+    funcs = function_names(
+        summaries
     )
 
     lines = [
 
         f"# Low-Level Design (LLD): {service_name}",
         "",
-        "**Author:** Documentation Automation",
+        "**Author**: Jijeesh Valappil",
+        f"**Date**: {today}",
+        "**Version**: 1.0",
         "",
-        f"**Date:** {today}",
-        "",
-        "**Version:** 1.0",
+        f"**Source Repository**: `{source_repo}`",
+        f"**Source PR Number**: `{source_pr_number}`",
+        f"**Source PR Title**: {source_pr_title}",
         "",
         "---",
         "",
@@ -266,72 +287,83 @@ def build_lld(
         "## 1.1 Overview",
         "",
         (
-            "This document describes the "
-            "detailed implementation design "
-            "for the identified service."
+            "This document describes the low-level "
+            "implementation architecture generated "
+            "from source code changes."
         ),
         "",
         "---",
         "",
         "# 2. Detailed Design",
         "",
-        "## 2.1 Components",
+        "## 2.1 Class Diagram",
         "",
-        bullet_list(function_names),
+        "```mermaid",
+        "classDiagram",
+        "    class SourceRepository",
+        "    class DocumentationGenerator",
         "",
-        "---",
+        "    SourceRepository --> DocumentationGenerator",
+        "```",
         "",
-        "# 3. Function Details",
+        "## 2.2 Sequence Diagram",
         "",
-        build_function_section(
+        "```mermaid",
+        "sequenceDiagram",
+        "    participant Developer",
+        "    participant SourceRepo",
+        "    participant ActionsRepo",
+        "    participant DocsRepo",
+        "",
+        "    Developer->>SourceRepo: Code Change",
+        "    SourceRepo->>ActionsRepo: Detect Impact",
+        "    ActionsRepo->>DocsRepo: Dispatch Event",
+        "    DocsRepo->>DocsRepo: Generate Documentation",
+        "```",
+        "",
+        "## 2.3 Component Breakdown",
+        "",
+        build_component_breakdown(
             summaries
         ),
         "",
         "---",
         "",
-        "# 4. Sequence Flow",
+        "# 3. Function Inventory",
         "",
-        "```text",
-        "Caller",
-        "   |",
-        "   v",
-        "Function",
-        "   |",
-        "   v",
-        "Return Result",
-        "```",
+        bullet_list(funcs),
         "",
         "---",
         "",
-        "# 5. Error Handling",
+        "# 4. Error Handling",
         "",
         "- Input validation",
-        "- Exception handling",
         "- Logging",
+        "- Exception handling",
         "",
         "---",
         "",
-        "# 6. Security Considerations",
+        "# 5. Security Considerations",
         "",
-        "- Review required",
-        "- Access control TBD",
-        "- Audit logging TBD",
-        "",
-        "---",
-        "",
-        "# 7. Unit Testing",
-        "",
-        bullet_list(function_names),
+        "- GitHub Secrets used for authentication",
+        "- Token values must never be logged",
+        "- Review generated documentation before publication",
         "",
         "---",
         "",
-        "# 8. Open Questions",
+        "# 6. Changed Files",
         "",
-        "- Additional business rules?",
-        "- Additional technical requirements?"
+        bullet_list(changed_files),
+        "",
+        "---",
+        "",
+        "# 7. Open Questions",
+        "",
+        "- Additional business rules required?",
+        "- Additional architectural requirements required?"
     ]
 
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def main():
@@ -345,19 +377,27 @@ def main():
         []
     )
 
-    changed_files = request.get(
+    top_level_changed_files = request.get(
         "changed_files",
         []
     )
 
-    summaries = inspect_changed_files(
-        changed_files
-    )
+    for service in services:
 
-    for service_info in services:
+        changed_files = (
+            service.get(
+                "changed_files",
+                []
+            )
+            or top_level_changed_files
+        )
+
+        summaries = inspect_changed_files(
+            changed_files
+        )
 
         output_file = Path(
-            service_info["lld"]
+            service["lld"]
         )
 
         output_file.parent.mkdir(
@@ -367,7 +407,8 @@ def main():
 
         output_file.write_text(
             build_lld(
-                service_info,
+                service,
+                request,
                 summaries
             ),
             encoding="utf-8"
