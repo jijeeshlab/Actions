@@ -97,138 +97,153 @@ def extract_python_functions_with_regex(
 
     pattern = re.compile(
         r"^def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*?)\)",
-        re.MULTILINE | re.D*TALL
+        re.MULTILINE | re.DOTALL
     )
 
-    for match in patte*n.finditer(content):
-        name * match.group(1)
-        raw_args =*match.group(2)
+    for match in pattern.finditer(content):
+        name = match.group(1)
+        raw_args = match.group(2)
 
         args = []
-*        for raw_arg in raw_args.sp*it(","):
-            clean_arg = r*w_arg.strip()
 
-            if not *lean_arg:
-                continue*
+        for raw_arg in raw_args.split(","):
+            clean_arg = raw_arg.strip()
+
+            if not clean_arg:
+                continue
+
             if ":" in clean_arg:
-*               clean_arg = clean_a*g.split(":")[0].strip()
+                clean_arg = clean_arg.split(":")[0].strip()
 
-         *  if "=" in clean_arg:
-           *    clean_arg = clean_arg.split("=*)[0].strip()
+            if "=" in clean_arg:
+                clean_arg = clean_arg.split("=")[0].strip()
 
-            if clean*arg and clean_arg not in ["self", "cls"]:
-                args.append*clean_arg)
+            if clean_arg and clean_arg not in ["self", "cls"]:
+                args.append(clean_arg)
 
-        functions.appe*d(
+        functions.append(
             {
-                "*ame": name,
-                "args"* args,
-                "returns": *Not detected",
-                "do*string": "Function detected by fal*back parser.",
+                "name": name,
+                "args": args,
+                "returns": "Not detected",
+                "docstring": "Function detected by fallback parser.",
             }
-     *  )
+        )
 
     return functions
 
 
-def in*pect_python_file(
-    file_path: P*th
+def inspect_python_file(
+    file_path: Path
 ) -> dict:
-    if not file_path*exists():
+    if not file_path.exists():
         print(
-         *  f"WARNING: Python file not found* {file_path}"
+            f"WARNING: Python file not found: {file_path}"
         )
 
-        r*turn {
-            "file": str(fil*_path),
-            "type": "pytho*",
+        return {
+            "file": str(file_path),
+            "type": "python",
             "exists": False,
-  *         "module_docstring": "",
- *          "functions": [],
-       *    "parse_status": "file_not_foun*",
+            "module_docstring": "",
+            "functions": [],
+            "parse_status": "file_not_found",
         }
 
-    content = file_p*th.read_text(
-        encoding="ut*-8",
+    content = file_path.read_text(
+        encoding="utf-8",
         errors="ignore"
-    )*
+    )
+
     try:
-        tree = ast.parse*content)
+        tree = ast.parse(
+            content
+        )
 
         functions = []
 
-*       for node in ast.walk(tree):*            if isinstance(node, as*.FunctionDef):
-                fun*tion_args = []
+        for node in ast.walk(
+            tree
+        ):
+            if isinstance(
+                node,
+                ast.FunctionDef
+            ):
+                function_args = []
 
-                fo* arg in node.args.args:
-          *         function_args.append(arg.*rg)
+                for arg in node.args.args:
+                    function_args.append(
+                        arg.arg
+                    )
 
-                return_type =*""
+                return_type = ""
 
-                if node.return*:
-                    return_type * ast.unparse(node.returns)
+                if node.returns:
+                    return_type = ast.unparse(
+                        node.returns
+                    )
 
-      *         functions.append(
-       *            {
-                    *   "name": node.name,
-            *           "args": function_args,
-*                       "returns": *eturn_type,
-                      * "docstring": ast.get_docstring(no*e) or "",
+                functions.append(
+                    {
+                        "name": node.name,
+                        "args": function_args,
+                        "returns": return_type,
+                        "docstring": ast.get_docstring(node) or "",
                     }
-  *             )
+                )
 
         print(
-   *        f"Python AST parse success* {file_path}"
+            f"Python AST parse success: {file_path}"
         )
 
-        p*int(
-            f"Functions detec*ed by AST: {len(functions)}"
-     *  )
+        print(
+            f"Functions detected by AST: {len(functions)}"
+        )
 
         return {
-            *file": str(file_path),
-           *"type": "python",
-            "exi*ts": True,
-            "module_doc*tring": ast.get_docstring(tree) or*"",
-            "functions": funct*ons,
-            "parse_status": "*st_success",
+            "file": str(file_path),
+            "type": "python",
+            "exists": True,
+            "module_docstring": ast.get_docstring(tree) or "",
+            "functions": functions,
+            "parse_status": "ast_success",
         }
 
-    except*SyntaxError as error:
-        prin*("")
-        print("==============*===================")
-        prin*("PYTHON AST PARSE FAILED")
-      * print("==========================*=======")
-        print(f"File: {f*le_path}")
-        print(f"Error: *error}")
-        print("Fallback p*rser will be used.")
-        print*"=================================*")
+    except SyntaxError as error:
+        print("")
+        print("==================================")
+        print("PYTHON AST PARSE FAILED")
+        print("==================================")
+        print(f"File: {file_path}")
+        print(f"Error: {error}")
+        print("Fallback parser will be used.")
+        print("==================================")
         print("")
 
-        fall*ack_functions = extract_python_fun*tions_with_regex(
-            cont*nt
+        fallback_functions = extract_python_functions_with_regex(
+            content
         )
 
         print(
-     *      f"Functions detected by fall*ack parser: {len(fallback_function*)}"
+            f"Functions detected by fallback parser: {len(fallback_functions)}"
         )
 
         return {
-  *         "file": str(file_path),
- *          "type": "python",
-      *     "exists": True,
-            "*odule_docstring": (
-              * "Python file detected, but AST pa*sing failed. "
-                "Fa*lback function detection was used.*
+            "file": str(file_path),
+            "type": "python",
+            "exists": True,
+            "module_docstring": (
+                "Python file detected, but AST parsing failed. "
+                "Fallback function detection was used."
             ),
-            "funct*ons": fallback_functions,
-        *   "parse_status": "ast_failed_reg*x_fallback",
+            "functions": fallback_functions,
+            "parse_status": "ast_failed_regex_fallback",
         }
 
 
-def inspe*t_shell_file(
+def inspect_shell_file(
     file_path: Path
-* -> dict:
+) -> dict:
     if not file_path.exists():
         print(
             f"WARNING: Shell file not found: {file_path}"
@@ -392,7 +407,9 @@ def component_descriptions(
         file_name = summary.get(
             "file",
             ""
-        ).replace(
+        )
+
+        file_name = file_name.replace(
             "source/",
             ""
         )
@@ -433,7 +450,9 @@ def function_detail_blocks(
         file_name = summary.get(
             "file",
             ""
-        ).replace(
+        )
+
+        file_name = file_name.replace(
             "source/",
             ""
         )
@@ -780,7 +799,7 @@ def build_hld(
             funcs
         ),
         "",
-        "### 2.2. Non-Functional Requirements (NFRs)",
+        "### 2.2. Non-Functional Requirements",
         "",
         "- **Performance**: To Be Determined (TBD)",
         "- **Scalability**: To Be Determined (TBD)",
@@ -1005,7 +1024,7 @@ def build_lld(
         "    SourceRepository --> AgentAwareDocumentationGenerator",
         "```",
         "",
-        "### 2.2. Sequence Diagram(s)",
+        "### 2.2. Sequence Diagram",
         "",
         "```mermaid",
         "sequenceDiagram",
@@ -1037,7 +1056,7 @@ def build_lld(
         "|------------|-------------|-----------|-------------|-------------|",
         "| Not applicable | Not applicable | Not applicable | Not applicable | No database layer detected |",
         "",
-        "### 3.2. Data Access Layer (DAL)",
+        "### 3.2. Data Access Layer",
         "",
         "No dedicated data access layer was identified from the changed source files.",
         "",
