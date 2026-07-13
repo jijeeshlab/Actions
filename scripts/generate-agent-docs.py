@@ -183,14 +183,14 @@ def in*pect_python_file(
 
         p*int(
             f"Functions detec*ed by AST: {len(functions)}"
-        )
+     *  )
 
         return {
-            "file": str(file_path),
-            "type": "python",
-            "exists": True,
-            "module_docstring": ast.get_docstring(tree) or "",
-            "functions": functions,
+            *file": str(file_path),
+           *"type": "python",
+            "exi*ts": True,
+            "module_doc*tring": ast.get_docstring(tree) or*"",
+            "functions": funct*ons,
             "parse_status": "ast_success",
         }
 
@@ -201,7 +201,7 @@ def in*pect_python_file(
         print("==================================")
         print(f"File: {file_path}")
         print(f"Error: {error}")
-        print("Falling back to regex function detection.")
+        print("Fallback parser will be used.")
         print("==================================")
         print("")
 
@@ -217,7 +217,10 @@ def in*pect_python_file(
             "file": str(file_path),
             "type": "python",
             "exists": True,
-            "module_docstring": "Python file detected, but AST parsing failed. Fallback function detection was used.",
+            "module_docstring": (
+                "Python file detected, but AST parsing failed. "
+                "Fallback function detection was used."
+            ),
             "functions": fallback_functions,
             "parse_status": "ast_failed_regex_fallback",
         }
@@ -389,9 +392,7 @@ def component_descriptions(
         file_name = summary.get(
             "file",
             ""
-        )
-
-        file_name = file_name.replace(
+        ).replace(
             "source/",
             ""
         )
@@ -401,14 +402,14 @@ def component_descriptions(
             "unknown"
         )
 
-        module_docstring = summary.get(
-            "module_docstring",
-            ""
-        )
-
         parse_status = summary.get(
             "parse_status",
             "unknown"
+        )
+
+        module_docstring = summary.get(
+            "module_docstring",
+            ""
         )
 
         if module_docstring:
@@ -432,9 +433,7 @@ def function_detail_blocks(
         file_name = summary.get(
             "file",
             ""
-        )
-
-        file_name = file_name.replace(
+        ).replace(
             "source/",
             ""
         )
@@ -447,7 +446,6 @@ def function_detail_blocks(
         lines.append(
             f"### Source File: `{file_name}`"
         )
-
         lines.append("")
         lines.append(
             f"**Parse Status:** `{parse_status}`"
@@ -550,6 +548,51 @@ def infer_overview(
     ).lower()
 
     if (
+        "banking" in combined_text
+        or "payment" in combined_text
+        or "fraud" in combined_text
+        or "loan" in combined_text
+        or "credit" in combined_text
+    ):
+        return (
+            "The platform provides banking, payment, fraud detection, credit, "
+            "and financial service deployment capabilities."
+        )
+
+    if (
+        "healthcare" in combined_text
+        or "patient" in combined_text
+        or "medical" in combined_text
+        or "clinical" in combined_text
+    ):
+        return (
+            "The platform provides healthcare, patient management, medical record, "
+            "and clinical analytics deployment capabilities."
+        )
+
+    if (
+        "retail" in combined_text
+        or "ecommerce" in combined_text
+        or "inventory" in combined_text
+        or "order" in combined_text
+    ):
+        return (
+            "The platform provides retail, ecommerce, inventory, and order "
+            "management deployment capabilities."
+        )
+
+    if (
+        "logistics" in combined_text
+        or "shipment" in combined_text
+        or "warehouse" in combined_text
+        or "route" in combined_text
+    ):
+        return (
+            "The platform provides logistics, shipment tracking, route optimization, "
+            "and warehouse management deployment capabilities."
+        )
+
+    if (
         "network" in combined_text
         or "vpn" in combined_text
         or "dns" in combined_text
@@ -600,51 +643,6 @@ def infer_overview(
         return (
             "The platform provides observability, monitoring, and logging "
             "capabilities for operational visibility."
-        )
-
-    if (
-        "banking" in combined_text
-        or "payment" in combined_text
-        or "fraud" in combined_text
-        or "loan" in combined_text
-        or "credit" in combined_text
-    ):
-        return (
-            "The platform provides banking, payment, fraud detection, credit, "
-            "and financial service deployment capabilities."
-        )
-
-    if (
-        "healthcare" in combined_text
-        or "patient" in combined_text
-        or "medical" in combined_text
-        or "clinical" in combined_text
-    ):
-        return (
-            "The platform provides healthcare, patient management, medical record, "
-            "and clinical analytics deployment capabilities."
-        )
-
-    if (
-        "retail" in combined_text
-        or "ecommerce" in combined_text
-        or "inventory" in combined_text
-        or "order" in combined_text
-    ):
-        return (
-            "The platform provides retail, ecommerce, inventory, and order "
-            "management deployment capabilities."
-        )
-
-    if (
-        "logistics" in combined_text
-        or "shipment" in combined_text
-        or "warehouse" in combined_text
-        or "route" in combined_text
-    ):
-        return (
-            "The platform provides logistics, shipment tracking, route optimization, "
-            "and warehouse management deployment capabilities."
         )
 
     return (
