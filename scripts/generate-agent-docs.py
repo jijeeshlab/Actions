@@ -191,44 +191,44 @@ def in*pect_python_file(
             "exi*ts": True,
             "module_doc*tring": ast.get_docstring(tree) or*"",
             "functions": funct*ons,
-            "parse_status": "ast_success",
+            "parse_status": "*st_success",
         }
 
-    except SyntaxError as error:
-        print("")
-        print("==================================")
-        print("PYTHON AST PARSE FAILED")
-        print("==================================")
-        print(f"File: {file_path}")
-        print(f"Error: {error}")
-        print("Fallback parser will be used.")
-        print("==================================")
+    except*SyntaxError as error:
+        prin*("")
+        print("==============*===================")
+        prin*("PYTHON AST PARSE FAILED")
+      * print("==========================*=======")
+        print(f"File: {f*le_path}")
+        print(f"Error: *error}")
+        print("Fallback p*rser will be used.")
+        print*"=================================*")
         print("")
 
-        fallback_functions = extract_python_functions_with_regex(
-            content
+        fall*ack_functions = extract_python_fun*tions_with_regex(
+            cont*nt
         )
 
         print(
-            f"Functions detected by fallback parser: {len(fallback_functions)}"
+     *      f"Functions detected by fall*ack parser: {len(fallback_function*)}"
         )
 
         return {
-            "file": str(file_path),
-            "type": "python",
-            "exists": True,
-            "module_docstring": (
-                "Python file detected, but AST parsing failed. "
-                "Fallback function detection was used."
+  *         "file": str(file_path),
+ *          "type": "python",
+      *     "exists": True,
+            "*odule_docstring": (
+              * "Python file detected, but AST pa*sing failed. "
+                "Fa*lback function detection was used.*
             ),
-            "functions": fallback_functions,
-            "parse_status": "ast_failed_regex_fallback",
+            "funct*ons": fallback_functions,
+        *   "parse_status": "ast_failed_reg*x_fallback",
         }
 
 
-def inspect_shell_file(
+def inspe*t_shell_file(
     file_path: Path
-) -> dict:
+* -> dict:
     if not file_path.exists():
         print(
             f"WARNING: Shell file not found: {file_path}"
